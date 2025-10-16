@@ -110,10 +110,41 @@ dbWriteTable(con, "TB_SEOUL_APT_ADMI", admi_seoul, overwrite = TRUE)
 
 
 ################################################################################
-## 03. Export data from tibbles to table of DBMS
+## 03. 서울시 상권분석서비스(소득소비-구 레벨)
 ################################################################################
 ##==============================================================================
-## 03.01. Connect DBMS
+## 03.01. Aggregation to cty level
+##==============================================================================
+admi_seoul |> 
+  select(BASE_YQ:CTY_NM, APT_HSMP_CNT:PRC_6_HDMIL_ABOVE_HSHLD_CNT) |> 
+  group_by(BASE_YQ, MEGA_CD, MEGA_NM, CTY_CD, CTY_NM) |>
+  summarise_all(function(x) round(sum(x, na.rm = TRUE))) -> admi_seoul_cty
+
+admi_seoul |> 
+  select(BASE_YQ:CTY_NM, AVRG_AE:AVRG_MKTC) |> 
+  group_by(BASE_YQ, MEGA_CD, MEGA_NM, CTY_CD, CTY_NM) |> 
+  summarise_if(is.numeric, function(x) round(mean(x, na.rm = TRUE))) -> admi_seoul_cty2
+
+admi_seoul_cty |> 
+  left_join(admi_seoul_cty2, by = c("BASE_YQ", "MEGA_CD", "MEGA_NM", "CTY_CD", "CTY_NM")) |> 
+  mutate(cret_dt = Sys.time()) |> 
+  mutate(cret_nm = "bitPublish") |> 
+  mutate(mdfy_dt = as.POSIXct(NA)) |> 
+  mutate(mdfy_nm = as.character(NA)) |> 
+  rename_with(toupper) -> admi_seoul_cty
+
+##==============================================================================
+## 03.02. Import from data frame to DBMS
+##==============================================================================
+dbWriteTable(con, "TB_SEOUL_APT_CTY", admi_seoul_cty, overwrite = TRUE)
+# dbGetQuery(con, "select * from TB_SEOUL_APT_CTY limit 5;")
+
+
+################################################################################
+## 04. Export data from tibbles to table of DBMS
+################################################################################
+##==============================================================================
+## 04.01. Connect DBMS
 ##==============================================================================
 dbDisconnect(con)
 

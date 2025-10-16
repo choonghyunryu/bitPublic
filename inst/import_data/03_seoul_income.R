@@ -107,6 +107,42 @@ dbWriteTable(con, "TB_SEOUL_EXPNDTR_ADMI", admi_seoul, overwrite = TRUE)
 
 
 ################################################################################
+## 03. 서울시 상권분석서비스(소득소비-구 레벨)
+################################################################################
+##==============================================================================
+## 03.01. Aggregation to cty level
+##==============================================================================
+admi_seoul |> 
+  select(BASE_YQ:CTY_NM, AVG_INCM_AMT:FD_EXPNDTR_TOTAMT) |> 
+  mutate(INCM_GRD_CD = as.integer(INCM_GRD_CD)) |> 
+  group_by(BASE_YQ, MEGA_CD, MEGA_NM, CTY_CD, CTY_NM) |>
+  summarise_all(function(x) round(mean(x, na.rm = TRUE))) |> 
+  mutate(INCM_GRD_CD = paste0("0", as.character(INCM_GRD_CD))) -> admi_seoul_cty
+
+names(admi_seoul_cty) <- stringr::str_replace(names(admi_seoul_cty), "TOTAMT", "AVGAMT") 
+
+admi_seoul |> 
+  select(BASE_YQ:CTY_NM, EXPNDTR_TOTAMT:FD_EXPNDTR_TOTAMT) |> 
+  group_by(BASE_YQ, MEGA_CD, MEGA_NM, CTY_CD, CTY_NM) |> 
+  summarise_if(is.numeric, function(x) round(sum(x, na.rm = TRUE))) -> admi_seoul_cty2
+
+admi_seoul_cty |> 
+  left_join(admi_seoul_cty2, by = c("BASE_YQ", "MEGA_CD", "MEGA_NM", "CTY_CD", "CTY_NM")) |> 
+  mutate(cret_dt = Sys.time()) |> 
+  mutate(cret_nm = "bitPublish") |> 
+  mutate(mdfy_dt = as.POSIXct(NA)) |> 
+  mutate(mdfy_nm = as.character(NA)) |> 
+  rename_with(toupper) -> admi_seoul_cty
+
+
+##==============================================================================
+## 03.02. Import from data frame to DBMS
+##==============================================================================
+dbWriteTable(con, "TB_SEOUL_EXPNDTR_CTY", admi_seoul_cty, overwrite = TRUE)
+# dbGetQuery(con, "select * from TB_SEOUL_EXPNDTR_CTY limit 5;")
+
+
+################################################################################
 ## 03. Export data from tibbles to table of DBMS
 ################################################################################
 ##==============================================================================
